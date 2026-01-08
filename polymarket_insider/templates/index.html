@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polymarket Insider Tracker</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 24px;
+        color: #1f2937;
+      }
+      h1 {
+        margin-bottom: 8px;
+      }
+      .meta {
+        color: #6b7280;
+        margin-bottom: 16px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+      }
+      th, td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #e5e7eb;
+        text-align: left;
+        font-size: 14px;
+      }
+      th {
+        cursor: pointer;
+        background: #f9fafb;
+        position: sticky;
+        top: 0;
+      }
+      tr:hover {
+        background: #f3f4f6;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #e0f2fe;
+        color: #0369a1;
+        font-size: 12px;
+      }
+      .negative {
+        color: #b91c1c;
+      }
+      .positive {
+        color: #047857;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Polymarket Insider Tracker</h1>
+    <div class="meta">
+      Signals обновляются каждые 60 секунд. Нажмите на заголовок, чтобы отсортировать.
+    </div>
+    <table id="signals-table">
+      <thead>
+        <tr>
+          <th data-key="market">Market</th>
+          <th data-key="timestamp">Time</th>
+          <th data-key="vol_15m">Vol 15m</th>
+          <th data-key="trades_15m">Trades 15m</th>
+          <th data-key="price_change_pct">Price Δ</th>
+          <th data-key="anomaly_volume_ratio">Vol Anom</th>
+          <th data-key="anomaly_trades_ratio">Trades Anom</th>
+          <th data-key="top_addresses">Top addresses</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <script>
+      const tableBody = document.querySelector('#signals-table tbody');
+      let sortKey = 'timestamp';
+      let sortDir = 'desc';
+
+      function formatAddresses(topAddresses) {
+        if (!topAddresses || topAddresses.length === 0) return '—';
+        return topAddresses.map(entry => `${entry.address} (${entry.count})`).join(', ');
+      }
+
+      function renderRows(signals) {
+        tableBody.innerHTML = '';
+        signals.forEach(signal => {
+          const row = document.createElement('tr');
+          const priceClass = signal.price_change_pct >= 0 ? 'positive' : 'negative';
+          row.innerHTML = `
+            <td>${signal.market}</td>
+            <td>${new Date(signal.timestamp).toLocaleString()}</td>
+            <td>${signal.vol_15m.toFixed(4)}</td>
+            <td>${signal.trades_15m}</td>
+            <td class="${priceClass}">${signal.price_change_pct.toFixed(2)}%</td>
+            <td><span class="pill">${signal.anomaly_volume_ratio.toFixed(2)}x</span></td>
+            <td><span class="pill">${signal.anomaly_trades_ratio.toFixed(2)}x</span></td>
+            <td>${formatAddresses(signal.top_addresses)}</td>
+          `;
+          tableBody.appendChild(row);
+        });
+      }
+
+      function sortSignals(signals) {
+        return [...signals].sort((a, b) => {
+          let valueA = a[sortKey];
+          let valueB = b[sortKey];
+          if (sortKey === 'timestamp') {
+            valueA = new Date(valueA).getTime();
+            valueB = new Date(valueB).getTime();
+          }
+          if (typeof valueA === 'string') {
+            return sortDir === 'asc'
+              ? valueA.localeCompare(valueB)
+              : valueB.localeCompare(valueA);
+          }
+          return sortDir === 'asc' ? valueA - valueB : valueB - valueA;
+        });
+      }
+
+      async function fetchSignals() {
+        const response = await fetch('/api/signals');
+        const signals = await response.json();
+        const sorted = sortSignals(signals);
+        renderRows(sorted);
+      }
+
+      document.querySelectorAll('th').forEach(header => {
+        header.addEventListener('click', () => {
+          const key = header.dataset.key;
+          if (sortKey === key) {
+            sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            sortKey = key;
+            sortDir = 'desc';
+          }
+          fetchSignals();
+        });
+      });
+
+      fetchSignals();
+      setInterval(fetchSignals, 60000);
+    </script>
+  </body>
+</html>
